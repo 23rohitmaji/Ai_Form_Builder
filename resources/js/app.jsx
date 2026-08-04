@@ -20,6 +20,7 @@ import {
 
 const fieldTypes = ['text', 'textarea', 'number', 'email', 'phone', 'url', 'date', 'dropdown', 'radio', 'checkbox', 'file', 'section', 'rating', 'boolean'];
 const optionTypes = ['dropdown', 'radio', 'checkbox'];
+const API_PREFIX = '/xapi';
 const fieldPalette = [
     ['text', 'Text'],
     ['textarea', 'Textarea'],
@@ -168,7 +169,7 @@ function BuilderApp() {
         event.preventDefault();
         await run('Authenticating...', async () => {
             const payload = authMode === 'register' ? auth : { email: auth.email, password: auth.password };
-            const data = await request(`/api/${authMode}`, {
+            const data = await request(`${API_PREFIX}/${authMode}`, {
                 method: 'POST',
                 body: JSON.stringify(payload),
             });
@@ -181,7 +182,7 @@ function BuilderApp() {
 
     async function logout() {
         await run('Logging out...', async () => {
-            await request('/api/logout', { method: 'POST' });
+            await request(`${API_PREFIX}/logout`, { method: 'POST' });
             localStorage.removeItem('fb_token');
             localStorage.removeItem('fb_user');
             setToken('');
@@ -193,7 +194,7 @@ function BuilderApp() {
 
     async function loadForms(options = {}) {
         await run('Loading forms...', async () => {
-            const data = await request('/api/forms');
+            const data = await request(`${API_PREFIX}/forms`);
             setForms(data.data || []);
         }, options);
     }
@@ -202,8 +203,8 @@ function BuilderApp() {
         await run('Saving form...', async () => {
             const payload = normalizeEditor(editor);
             const data = activeForm
-                ? await request(`/api/forms/${activeForm.id}`, { method: 'PUT', body: JSON.stringify(payload) })
-                : await request('/api/forms', { method: 'POST', body: JSON.stringify(payload) });
+                ? await request(`${API_PREFIX}/forms/${activeForm.id}`, { method: 'PUT', body: JSON.stringify(payload) })
+                : await request(`${API_PREFIX}/forms`, { method: 'POST', body: JSON.stringify(payload) });
             setActiveForm(data.data);
             setEditor(resourceToEditor(data.data));
             await loadForms();
@@ -214,7 +215,7 @@ function BuilderApp() {
     async function deleteForm(form) {
         if (!confirm(`Delete "${form.title}"?`)) return;
         await run('Deleting form...', async () => {
-            await request(`/api/forms/${form.id}`, { method: 'DELETE' });
+            await request(`${API_PREFIX}/forms/${form.id}`, { method: 'DELETE' });
             if (activeForm?.id === form.id) {
                 newForm();
             }
@@ -224,7 +225,7 @@ function BuilderApp() {
 
     async function openForm(form) {
         await run('Opening form...', async () => {
-            const data = await request(`/api/forms/${form.id}`);
+            const data = await request(`${API_PREFIX}/forms/${form.id}`);
             setActiveForm(data.data);
             setEditor(resourceToEditor(data.data));
             setSubmissionPage(1);
@@ -239,7 +240,7 @@ function BuilderApp() {
         await run('Loading submissions...', async () => {
             const params = new URLSearchParams({ page, per_page: 5 });
             if (search) params.set('search', search);
-            const data = await request(`/api/forms/${formId}/submissions?${params.toString()}`);
+            const data = await request(`${API_PREFIX}/forms/${formId}/submissions?${params.toString()}`);
             setSubmissions(data.data || []);
             setSubmissionMeta(data.meta || null);
         }, options);
@@ -248,14 +249,14 @@ function BuilderApp() {
     async function loadAnalytics(formId = activeForm?.id, options = {}) {
         if (!formId) return;
         await run('Loading analytics...', async () => {
-            const data = await request(`/api/forms/${formId}/analytics`);
+            const data = await request(`${API_PREFIX}/forms/${formId}/analytics`);
             setAnalytics(data);
         }, options);
     }
 
     async function generateAiSchema() {
         await run('Generating schema...', async () => {
-            const data = await request('/api/ai/forms', {
+            const data = await request(`${API_PREFIX}/ai/forms`, {
                 method: 'POST',
                 body: JSON.stringify({ prompt }),
             });
@@ -266,7 +267,7 @@ function BuilderApp() {
 
     async function editAiSchema() {
         await run('Editing current schema...', async () => {
-            const data = await request('/api/ai/forms', {
+            const data = await request(`${API_PREFIX}/ai/forms`, {
                 method: 'POST',
                 body: JSON.stringify({
                     prompt: editPrompt,
@@ -286,7 +287,7 @@ function BuilderApp() {
         if (!activeForm) return;
 
         await run('Exporting CSV...', async () => {
-            const response = await fetch(`/api/forms/${activeForm.id}/submissions/export`, {
+            const response = await fetch(`${API_PREFIX}/forms/${activeForm.id}/submissions/export`, {
                 headers: {
                     Accept: 'text/csv',
                     Authorization: `Bearer ${token}`,
@@ -674,7 +675,7 @@ function PublicForm({ slug }) {
     const [errors, setErrors] = useState([]);
 
     useEffect(() => {
-        fetch(`/api/public/forms/${slug}`, { headers: { Accept: 'application/json' } })
+        fetch(`${API_PREFIX}/public/forms/${slug}`, { headers: { Accept: 'application/json' } })
             .then(async (response) => {
                 const data = await response.json();
                 if (!response.ok) throw data;
@@ -695,7 +696,7 @@ function PublicForm({ slug }) {
         setErrors([]);
 
         try {
-            const response = await fetch(`/api/public/forms/${slug}/submissions`, {
+            const response = await fetch(`${API_PREFIX}/public/forms/${slug}/submissions`, {
                 method: 'POST',
                 headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
                 body: JSON.stringify({ answers }),

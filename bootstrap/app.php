@@ -17,6 +17,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'api.token' => ApiTokenAuth::class,
         ]);
+
+        $middleware->validateCsrfTokens(except: [
+            'xapi/*',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
