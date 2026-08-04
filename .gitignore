@@ -1,6 +1,8 @@
 *.log
 .DS_Store
 .env
+.env.*
+vercel-production.env
 .env.backup
 .env.production
 .phpactor.json
