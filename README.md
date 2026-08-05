@@ -2,6 +2,17 @@
 
 Laravel backend assessment for a dynamic form builder with REST APIs, schema-driven validation, queue processing, caching, AI-assisted form generation, and submission analytics.
 
+## Required Deliverables
+
+- `README.md` - setup, feature list, API quick start, and reviewer notes.
+- `DECISIONS.md` - architecture, database, authentication, AI, queue/cache, deployment, and tradeoff decisions.
+- `database/migrations/` - complete schema migrations for users, forms, fields, submissions, API tokens, queues, cache, and jobs.
+- `database/seeders/` - idempotent sample data seeders with a demo admin, rich sample form, and submission.
+- `samples/forms_import.json` - sample form payload for API import/create testing.
+- `samples/submissions_import.csv` - sample submission data matching exported CSV column shape.
+- `docs/API.md` - endpoint examples for auth, form CRUD, public forms, submissions, export, and AI.
+- `docs/DEPLOYMENT.md` - local, Docker, Vercel, Aiven MySQL, migration, and smoke-test notes.
+
 ## Features
 
 - React + Vite frontend for the authenticated builder dashboard and public form pages.
@@ -41,6 +52,13 @@ The default `.env.example` uses SQLite, database queues, and database cache so r
 
 ```bash
 php artisan queue:work
+```
+
+Seeded reviewer account:
+
+```text
+email: admin@example.com
+password: password123
 ```
 
 ## Docker Setup
@@ -140,11 +158,14 @@ GET    /api/forms/{form}/submissions/export
 GET    /api/forms/{form}/analytics
 ```
 
+Additional examples are available in `docs/API.md`.
+
 ## Tests And Quality
 
 ```bash
 php artisan test
 ./vendor/bin/pint
+npm run build
 ```
 
 ## Design Notes

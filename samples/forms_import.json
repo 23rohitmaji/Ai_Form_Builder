@@ -1,0 +1,84 @@
+[
+  {
+    "title": "Job Application Form",
+    "slug": "job-application-sample",
+    "description": "Sample import payload for creating a published job application form through POST /api/forms.",
+    "is_published": true,
+    "store_submissions": true,
+    "settings": {
+      "confirmation_message": "Thanks for applying. Our team will review your details."
+    },
+    "fields": [
+      {
+        "key": "applicant_name",
+        "label": "Applicant name",
+        "type": "text",
+        "is_required": true,
+        "placeholder": "Full name",
+        "validation_rules": ["min_length:2", "max_length:120"],
+        "section": "Profile",
+        "step": "Basic details"
+      },
+      {
+        "key": "email",
+        "label": "Email",
+        "type": "email",
+        "is_required": true,
+        "section": "Profile",
+        "step": "Basic details"
+      },
+      {
+        "key": "phone",
+        "label": "Phone number",
+        "type": "phone",
+        "is_required": true,
+        "placeholder": "+91 99999 99999",
+        "section": "Profile",
+        "step": "Basic details"
+      },
+      {
+        "key": "years_of_experience",
+        "label": "Years of experience",
+        "type": "number",
+        "is_required": true,
+        "validation_rules": ["min:0", "max:50"],
+        "section": "Experience",
+        "step": "Work history"
+      },
+      {
+        "key": "primary_skills",
+        "label": "Primary skills",
+        "type": "checkbox",
+        "options": ["Laravel", "React", "MySQL", "Redis", "AI integrations"],
+        "section": "Experience",
+        "step": "Work history"
+      },
+      {
+        "key": "notice_period",
+        "label": "Notice period",
+        "type": "dropdown",
+        "options": ["Immediate", "15 days", "30 days", "60 days"],
+        "section": "Availability",
+        "step": "Availability"
+      },
+      {
+        "key": "portfolio_url",
+        "label": "Portfolio URL",
+        "type": "url",
+        "validation_rules": ["url"],
+        "section": "Documents",
+        "step": "Review"
+      },
+      {
+        "key": "resume",
+        "label": "Resume",
+        "type": "file",
+        "is_required": true,
+        "validation_rules": ["file_types:pdf,doc,docx", "file_max:2048"],
+        "help_text": "Accepted file metadata for PDF/DOC/DOCX up to 2 MB.",
+        "section": "Documents",
+        "step": "Review"
+      }
+    ]
+  }
+]
