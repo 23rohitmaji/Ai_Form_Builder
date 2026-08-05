@@ -156,8 +156,17 @@ function BuilderApp() {
 
     async function submitAuth(event) {
         event.preventDefault();
+        const payload = authForms[authMode];
+        const localErrors = validateAuthPayload(authMode, payload);
+
+        if (localErrors.length) {
+            setNotice('Please fix the highlighted fields.');
+            setErrors(localErrors);
+
+            return;
+        }
+
         await run('Authenticating...', async () => {
-            const payload = authForms[authMode];
             const data = await request(`${API_PREFIX}/${authMode}`, {
                 method: 'POST',
                 body: JSON.stringify(payload),
@@ -358,9 +367,9 @@ function BuilderApp() {
                             <button type="button" className={authMode === 'register' ? 'active' : ''} onClick={() => setAuthMode('register')}>Register</button>
                             <button type="button" className={authMode === 'login' ? 'active' : ''} onClick={() => setAuthMode('login')}>Login</button>
                         </div>
-                        {authMode === 'register' && <TextInput label="Name" value={authForms.register.name} placeholder="Your name" onChange={(name) => updateAuthField('name', name)} />}
-                        <TextInput label="Email" value={authForms[authMode].email} placeholder="you@example.com" onChange={(email) => updateAuthField('email', email)} />
-                        <TextInput label="Password" type="password" value={authForms[authMode].password} placeholder="Minimum 8 characters" onChange={(password) => updateAuthField('password', password)} />
+                        {authMode === 'register' && <TextInput label="Name" value={authForms.register.name} placeholder="Your name" required onChange={(name) => updateAuthField('name', name)} />}
+                        <TextInput label="Email" type="email" value={authForms[authMode].email} placeholder="you@example.com" required autoComplete="email" onChange={(email) => updateAuthField('email', email)} />
+                        <TextInput label="Password" type="password" value={authForms[authMode].password} placeholder="Minimum 8 characters" required minLength={8} autoComplete={authMode === 'register' ? 'new-password' : 'current-password'} onChange={(password) => updateAuthField('password', password)} />
                         <button className="primary" disabled={busy}>{busy ? <Loader2 className="spin" /> : <CheckCircle2 />} Continue</button>
                         <p className="notice">{notice}</p>
                         {errors.length > 0 && <ErrorList errors={errors} />}
@@ -861,11 +870,19 @@ function FieldShell({ field, children }) {
     );
 }
 
-function TextInput({ label, value, onChange, type = 'text', placeholder = '' }) {
+function TextInput({ label, value, onChange, type = 'text', placeholder = '', required = false, minLength, autoComplete }) {
     return (
         <label className="input-group">
             {label}
-            <input type={type} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
+            <input
+                type={type}
+                value={value}
+                placeholder={placeholder}
+                required={required}
+                minLength={minLength}
+                autoComplete={autoComplete || (type === 'password' ? 'current-password' : type === 'email' ? 'email' : 'off')}
+                onChange={(event) => onChange(event.target.value)}
+            />
         </label>
     );
 }
@@ -940,6 +957,40 @@ function ErrorList({ errors }) {
             {errors.map((error, index) => <p key={`${error}-${index}`}>{error}</p>)}
         </div>
     );
+}
+
+function validateAuthPayload(mode, payload) {
+    const errors = [];
+    const email = payload.email?.trim() || '';
+    const password = payload.password || '';
+
+    if (mode === 'register') {
+        const name = payload.name?.trim() || '';
+
+        if (!name) {
+            errors.push('Name is required.');
+        } else if (name.length < 2) {
+            errors.push('Name must be at least 2 characters.');
+        } else if (!/^[a-zA-Z][a-zA-Z\s.'-]{1,118}$/.test(name)) {
+            errors.push('Name can contain only letters, spaces, apostrophes, dots, and hyphens.');
+        }
+    }
+
+    if (!email) {
+        errors.push('Email is required.');
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+        errors.push('Enter a valid email address.');
+    }
+
+    if (!password) {
+        errors.push('Password is required.');
+    } else if (password.length < 8) {
+        errors.push('Password must be at least 8 characters.');
+    } else if (/\s/.test(password)) {
+        errors.push('Password must not contain spaces.');
+    }
+
+    return errors;
 }
 
 function splitLines(value) {
