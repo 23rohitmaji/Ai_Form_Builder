@@ -358,7 +358,6 @@ function BuilderApp() {
             <main className="auth-shell">
                 <section className="auth-panel">
                     <div>
-                        <span className="eyebrow">Backend Developer Laravel</span>
                         <h1>AI Form Builder</h1>
                         <p>Build forms, publish them, collect submissions, inspect analytics, export CSVs, and generate schemas with AI.</p>
                     </div>
