@@ -313,6 +313,11 @@ select {
     min-width: 0;
 }
 
+input::placeholder,
+textarea::placeholder {
+    color: #98a2b3;
+}
+
 textarea {
     min-height: 92px;
     resize: vertical;
@@ -700,6 +705,49 @@ details pre,
     color: var(--muted);
 }
 
+.status-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: grid;
+    place-items: center;
+    padding: 18px;
+    background: rgba(244, 247, 251, 0.72);
+    backdrop-filter: blur(2px);
+}
+
+.status-card {
+    width: min(420px, 100%);
+    display: grid;
+    gap: 12px;
+    padding: 18px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+}
+
+.status-message {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: var(--ink);
+    font-weight: 750;
+}
+
+.shimmer-line {
+    height: 14px;
+    width: 68%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #edf2f7 0%, #dfe7f0 50%, #edf2f7 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.1s linear infinite;
+}
+
+.shimmer-line.wide {
+    width: 100%;
+}
+
 .spin {
     animation: spin 0.9s linear infinite;
 }
@@ -710,6 +758,14 @@ details pre,
     gap: 16px;
     padding: 24px;
     box-shadow: var(--shadow);
+}
+
+.public-form.inactive-form {
+    text-align: center;
+}
+
+.public-form.inactive-form .notice {
+    font-size: 15px;
 }
 
 .public-form h1 {
@@ -738,6 +794,16 @@ details pre,
 @keyframes spin {
     to {
         transform: rotate(360deg);
+    }
+}
+
+@keyframes shimmer {
+    from {
+        background-position: 200% 0;
+    }
+
+    to {
+        background-position: -200% 0;
     }
 }
 

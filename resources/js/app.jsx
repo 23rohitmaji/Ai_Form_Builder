@@ -17,36 +17,18 @@ import {
     Send,
     Trash2,
 } from 'lucide-react';
-
-const fieldTypes = ['text', 'textarea', 'number', 'email', 'phone', 'url', 'date', 'dropdown', 'radio', 'checkbox', 'file', 'section', 'rating', 'boolean'];
-const optionTypes = ['dropdown', 'radio', 'checkbox'];
-const API_PREFIX = '/xapi';
-const fieldPalette = [
-    ['text', 'Text'],
-    ['textarea', 'Textarea'],
-    ['number', 'Number'],
-    ['email', 'Email'],
-    ['phone', 'Phone'],
-    ['url', 'URL'],
-    ['date', 'Date'],
-    ['dropdown', 'Dropdown'],
-    ['radio', 'Radio'],
-    ['checkbox', 'Checkbox'],
-    ['file', 'File upload'],
-    ['section', 'Section heading'],
-    ['rating', 'Rating'],
-    ['boolean', 'Yes/No'],
-];
+import { apiRequest, formatErrors } from './apiClient';
+import { API_PREFIX, DEFAULT_PROMPTS, FIELD_PALETTE, FIELD_TYPES, OPTION_TYPES, STORAGE_KEYS } from './constants';
 
 const emptyField = (type = 'text') => ({
     key: `field_${Date.now()}`,
-    label: fieldPalette.find(([value]) => value === type)?.[1] || 'New field',
+    label: FIELD_PALETTE.find(([value]) => value === type)?.[1] || 'New field',
     type,
     placeholder: '',
     help_text: '',
     default_value: '',
     is_required: false,
-    options: optionTypes.includes(type) ? ['Option 1', 'Option 2'] : [],
+    options: OPTION_TYPES.includes(type) ? ['Option 1', 'Option 2'] : [],
     validation_rules: [],
     section: '',
     step: '',
@@ -75,8 +57,8 @@ function App() {
 }
 
 function BuilderApp() {
-    const [token, setToken] = useState(localStorage.getItem('fb_token') || '');
-    const [user, setUser] = useState(JSON.parse(localStorage.getItem('fb_user') || 'null'));
+    const [token, setToken] = useState(localStorage.getItem(STORAGE_KEYS.sessionToken) || localStorage.getItem(STORAGE_KEYS.legacyToken) || '');
+    const [user, setUser] = useState(JSON.parse(localStorage.getItem(STORAGE_KEYS.userDetails) || localStorage.getItem(STORAGE_KEYS.legacyUser) || 'null'));
     const [forms, setForms] = useState([]);
     const [activeForm, setActiveForm] = useState(null);
     const [editor, setEditor] = useState(starterForm());
@@ -85,15 +67,34 @@ function BuilderApp() {
     const [submissionSearch, setSubmissionSearch] = useState('');
     const [submissionPage, setSubmissionPage] = useState(1);
     const [analytics, setAnalytics] = useState(null);
-    const [prompt, setPrompt] = useState('Create an event registration form for an AI workshop.');
-    const [editPrompt, setEditPrompt] = useState('Add an emergency contact section.');
+    const [prompt, setPrompt] = useState(DEFAULT_PROMPTS.create);
+    const [editPrompt, setEditPrompt] = useState(DEFAULT_PROMPTS.edit);
     const [busy, setBusy] = useState(false);
     const [notice, setNotice] = useState('Ready');
     const [errors, setErrors] = useState([]);
     const [authMode, setAuthMode] = useState('register');
-    const [auth, setAuth] = useState({ name: 'Demo Admin', email: `demo${Date.now()}@example.com`, password: 'password123' });
+    const [authForms, setAuthForms] = useState({
+        register: { name: '', email: '', password: '' },
+        login: { email: '', password: '' },
+    });
 
     const authed = Boolean(token);
+
+    useEffect(() => {
+        const legacyToken = localStorage.getItem(STORAGE_KEYS.legacyToken);
+        const legacyUser = localStorage.getItem(STORAGE_KEYS.legacyUser);
+
+        if (legacyToken && !localStorage.getItem(STORAGE_KEYS.sessionToken)) {
+            localStorage.setItem(STORAGE_KEYS.sessionToken, legacyToken);
+        }
+
+        if (legacyUser && !localStorage.getItem(STORAGE_KEYS.userDetails)) {
+            localStorage.setItem(STORAGE_KEYS.userDetails, legacyUser);
+        }
+
+        localStorage.removeItem(STORAGE_KEYS.legacyToken);
+        localStorage.removeItem(STORAGE_KEYS.legacyUser);
+    }, []);
 
     useEffect(() => {
         if (authed) {
@@ -124,21 +125,9 @@ function BuilderApp() {
     }, [activeForm?.id, submissionPage, submissionSearch]);
 
     async function request(path, options = {}) {
-        const response = await fetch(path, {
-            ...options,
-            headers: {
-                Accept: 'application/json',
-                'Content-Type': 'application/json',
-                ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                ...(options.headers || {}),
-            },
-        });
-        const text = await response.text();
-        const data = text ? safeJson(text) : null;
-        if (!response.ok) {
-            throw data || { message: `HTTP ${response.status}` };
-        }
-        return data;
+        const response = await apiRequest(path, { ...options, token });
+
+        return response.data;
     }
 
     async function run(message, callback, options = {}) {
@@ -168,25 +157,19 @@ function BuilderApp() {
     async function submitAuth(event) {
         event.preventDefault();
         await run('Authenticating...', async () => {
-            const payload = authMode === 'register' ? auth : { email: auth.email, password: auth.password };
+            const payload = authForms[authMode];
             const data = await request(`${API_PREFIX}/${authMode}`, {
                 method: 'POST',
                 body: JSON.stringify(payload),
             });
-            localStorage.setItem('fb_token', data.token);
-            localStorage.setItem('fb_user', JSON.stringify(data.user));
-            setToken(data.token);
-            setUser(data.user);
+            setSession(data.token, data.user);
         });
     }
 
     async function logout() {
         await run('Logging out...', async () => {
             await request(`${API_PREFIX}/logout`, { method: 'POST' });
-            localStorage.removeItem('fb_token');
-            localStorage.removeItem('fb_user');
-            setToken('');
-            setUser(null);
+            clearSession();
             setForms([]);
             setActiveForm(null);
         });
@@ -287,18 +270,11 @@ function BuilderApp() {
         if (!activeForm) return;
 
         await run('Exporting CSV...', async () => {
-            const response = await fetch(`${API_PREFIX}/forms/${activeForm.id}/submissions/export`, {
-                headers: {
-                    Accept: 'text/csv',
-                    Authorization: `Bearer ${token}`,
-                },
+            const response = await apiRequest(`${API_PREFIX}/forms/${activeForm.id}/submissions/export`, {
+                responseType: 'blob',
+                token,
             });
-
-            if (!response.ok) {
-                throw { message: 'Export failed.' };
-            }
-
-            const blob = await response.blob();
+            const blob = response.data;
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
@@ -313,6 +289,34 @@ function BuilderApp() {
         setEditor(starterForm());
         setSubmissions([]);
         setAnalytics(null);
+    }
+
+    function setSession(nextToken, nextUser) {
+        localStorage.setItem(STORAGE_KEYS.sessionToken, nextToken);
+        localStorage.setItem(STORAGE_KEYS.userDetails, JSON.stringify(nextUser));
+        localStorage.removeItem(STORAGE_KEYS.legacyToken);
+        localStorage.removeItem(STORAGE_KEYS.legacyUser);
+        setToken(nextToken);
+        setUser(nextUser);
+    }
+
+    function clearSession() {
+        localStorage.removeItem(STORAGE_KEYS.sessionToken);
+        localStorage.removeItem(STORAGE_KEYS.userDetails);
+        localStorage.removeItem(STORAGE_KEYS.legacyToken);
+        localStorage.removeItem(STORAGE_KEYS.legacyUser);
+        setToken('');
+        setUser(null);
+    }
+
+    function updateAuthField(field, value) {
+        setAuthForms({
+            ...authForms,
+            [authMode]: {
+                ...authForms[authMode],
+                [field]: value,
+            },
+        });
     }
 
     function addField(type) {
@@ -354,12 +358,14 @@ function BuilderApp() {
                             <button type="button" className={authMode === 'register' ? 'active' : ''} onClick={() => setAuthMode('register')}>Register</button>
                             <button type="button" className={authMode === 'login' ? 'active' : ''} onClick={() => setAuthMode('login')}>Login</button>
                         </div>
-                        {authMode === 'register' && <TextInput label="Name" value={auth.name} onChange={(name) => setAuth({ ...auth, name })} />}
-                        <TextInput label="Email" value={auth.email} onChange={(email) => setAuth({ ...auth, email })} />
-                        <TextInput label="Password" type="password" value={auth.password} onChange={(password) => setAuth({ ...auth, password })} />
+                        {authMode === 'register' && <TextInput label="Name" value={authForms.register.name} placeholder="Your name" onChange={(name) => updateAuthField('name', name)} />}
+                        <TextInput label="Email" value={authForms[authMode].email} placeholder="you@example.com" onChange={(email) => updateAuthField('email', email)} />
+                        <TextInput label="Password" type="password" value={authForms[authMode].password} placeholder="Minimum 8 characters" onChange={(password) => updateAuthField('password', password)} />
                         <button className="primary" disabled={busy}>{busy ? <Loader2 className="spin" /> : <CheckCircle2 />} Continue</button>
                         <p className="notice">{notice}</p>
+                        {errors.length > 0 && <ErrorList errors={errors} />}
                     </form>
+                    <StatusOverlay busy={busy} notice={notice} errors={errors} />
                 </section>
             </main>
         );
@@ -439,7 +445,7 @@ function BuilderApp() {
                             <button className="secondary compact" onClick={() => addField('text')}><Plus /> Add text</button>
                         </div>
                         <div className="field-palette">
-                            {fieldPalette.map(([type, label]) => (
+                            {FIELD_PALETTE.map(([type, label]) => (
                                 <button
                                     key={type}
                                     className="palette-button"
@@ -570,13 +576,14 @@ function BuilderApp() {
                 </section>
             </section>
 
+            <StatusOverlay busy={busy} notice={notice} errors={errors} />
             <footer className="toast">{busy && <Loader2 className="spin" />} {notice}</footer>
         </main>
     );
 }
 
 function FieldEditor({ field, index, onChange, onMove, onMoveFrom, onDuplicate, onDelete }) {
-    const usesOptions = optionTypes.includes(field.type);
+    const usesOptions = OPTION_TYPES.includes(field.type);
     const isDisplayOnly = field.type === 'section';
     const supportsDefault = !['file', 'section'].includes(field.type);
 
@@ -609,7 +616,7 @@ function FieldEditor({ field, index, onChange, onMove, onMoveFrom, onDuplicate, 
                 <label className="input-group">
                     Type
                     <select value={field.type} onChange={(event) => onChange({ ...field, type: event.target.value })}>
-                        {fieldTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+                        {FIELD_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
                     </select>
                 </label>
                 <label className="checkline field-check">
@@ -673,66 +680,66 @@ function PublicForm({ slug }) {
     const [status, setStatus] = useState('Loading form...');
     const [submitted, setSubmitted] = useState(null);
     const [errors, setErrors] = useState([]);
+    const [busy, setBusy] = useState(false);
+    const inactive = !busy && !form && status === 'Form not active';
 
     useEffect(() => {
-        fetch(`${API_PREFIX}/public/forms/${slug}`, { headers: { Accept: 'application/json' } })
-            .then(async (response) => {
-                const data = await response.json();
-                if (!response.ok) throw data;
-                setForm(data.data);
+        setBusy(true);
+        apiRequest(`${API_PREFIX}/public/forms/${slug}`)
+            .then((response) => {
+                setForm(response.data.data);
                 setErrors([]);
                 setStatus('Ready');
             })
             .catch((error) => {
-                setStatus(error.message || 'Unable to load form.');
+                setStatus('Form not active');
                 setErrors(formatErrors(error));
+            })
+            .finally(() => {
+                setBusy(false);
             });
     }, [slug]);
 
     async function submit(event) {
         event.preventDefault();
+        setBusy(true);
         setStatus('Submitting...');
         setSubmitted(null);
         setErrors([]);
 
         try {
-            const response = await fetch(`${API_PREFIX}/public/forms/${slug}/submissions`, {
+            const response = await apiRequest(`${API_PREFIX}/public/forms/${slug}/submissions`, {
                 method: 'POST',
-                headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
                 body: JSON.stringify({ answers }),
             });
-            const data = await response.json();
-            if (!response.ok) {
-                setStatus(data.message || 'Please check the form.');
-                setErrors(formatErrors(data));
-                setSubmitted(data);
-                return;
-            }
             setStatus('Submission received.');
-            setSubmitted(data.data);
+            setSubmitted(response.data.data);
             setAnswers({});
             localStorage.setItem('form_builder_submission_event', JSON.stringify({ slug, at: Date.now() }));
         } catch (error) {
-            setStatus('Unable to submit form.');
+            setStatus(error.message || 'Unable to submit form.');
             setErrors(formatErrors(error));
+        } finally {
+            setBusy(false);
         }
     }
 
     return (
         <main className="public-shell">
-            <form className="public-form" onSubmit={submit}>
+            <form className={`public-form ${inactive ? 'inactive-form' : ''}`} onSubmit={submit}>
                 <div>
                     <span className="eyebrow">Published Form</span>
-                    <h1>{form?.title || 'Loading...'}</h1>
+                    <h1>{inactive ? 'Form not active' : form?.title || 'Loading...'}</h1>
                     <p>{form?.description}</p>
                 </div>
-                {form?.fields?.map((field) => (
+                {!inactive && form?.fields?.map((field) => (
                     <DynamicInput key={field.key} field={field} value={answers[field.key]} onChange={(value) => setAnswers({ ...answers, [field.key]: value })} />
                 ))}
-                <button className="primary" disabled={!form}><Send /> Submit</button>
+                {!inactive && <button className="primary" disabled={!form || busy}><Send /> Submit</button>}
                 <p className="notice">{status}</p>
-                {errors.length > 0 && <ErrorList errors={errors} />}
+                {errors.length > 0 && !inactive && <ErrorList errors={errors} />}
                 {submitted && <pre className="response-box">{JSON.stringify(submitted, null, 2)}</pre>}
+                <StatusOverlay busy={busy} notice={status} errors={errors} />
             </form>
         </main>
     );
@@ -854,12 +861,30 @@ function FieldShell({ field, children }) {
     );
 }
 
-function TextInput({ label, value, onChange, type = 'text' }) {
+function TextInput({ label, value, onChange, type = 'text', placeholder = '' }) {
     return (
         <label className="input-group">
             {label}
-            <input type={type} value={value} onChange={(event) => onChange(event.target.value)} />
+            <input type={type} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
         </label>
+    );
+}
+
+function StatusOverlay({ busy, notice, errors }) {
+    if (!busy) return null;
+
+    return (
+        <div className="status-overlay" role="status" aria-live="polite">
+            <div className="status-card">
+                <div className="shimmer-line wide" />
+                <div className="shimmer-line" />
+                <div className="status-message">
+                    <Loader2 className="spin" />
+                    <span>{notice || 'Working...'}</span>
+                </div>
+                {errors?.length > 0 && <ErrorList errors={errors} />}
+            </div>
+        </div>
     );
 }
 
@@ -917,36 +942,6 @@ function ErrorList({ errors }) {
     );
 }
 
-function safeJson(text) {
-    try {
-        return JSON.parse(text);
-    } catch {
-        return { message: text };
-    }
-}
-
-function formatErrors(error) {
-    if (!error) {
-        return ['Something went wrong.'];
-    }
-
-    const validation = error.errors || {};
-    const messages = Object.entries(validation).flatMap(([field, fieldErrors]) => {
-        const values = Array.isArray(fieldErrors) ? fieldErrors : [fieldErrors];
-        return values.map((message) => `${field}: ${message}`);
-    });
-
-    if (messages.length) {
-        return messages;
-    }
-
-    if (error.message) {
-        return [error.message];
-    }
-
-    return [JSON.stringify(error)];
-}
-
 function splitLines(value) {
     return value
         .split(/\r\n|\r|\n/)
@@ -987,7 +982,7 @@ function normalizeType(type, label = '') {
         integer: 'number',
         decimal: 'number',
         currency: 'number',
-        rating: 'number',
+        rating: 'rating',
         select: 'dropdown',
         single_select: 'dropdown',
         multi_select: 'dropdown',
@@ -998,8 +993,8 @@ function normalizeType(type, label = '') {
         yes_no: 'boolean',
         consent: 'boolean',
         agreement: 'boolean',
-        phone: 'text',
-        tel: 'text',
+        phone: 'phone',
+        tel: 'phone',
         file: 'file',
         upload: 'file',
         document: 'file',
@@ -1011,7 +1006,7 @@ function normalizeType(type, label = '') {
     };
     const mapped = aliases[normalized] || normalized;
 
-    if (fieldTypes.includes(mapped)) {
+    if (FIELD_TYPES.includes(mapped)) {
         return mapped;
     }
 
@@ -1030,7 +1025,7 @@ function normalizeType(type, label = '') {
 function normalizeOptions(options, type, label = '') {
     const normalizedType = normalizeType(type, label);
 
-    if (!optionTypes.includes(normalizedType)) {
+    if (!OPTION_TYPES.includes(normalizedType)) {
         return [];
     }
 
